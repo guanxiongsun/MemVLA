@@ -167,7 +167,7 @@ uv sync --python 3.11 --all-extras --dev
   - Target numbers still come from the per-task tables in the RoboMME paper.
 - [ ] Download only the variants you need (`hf download … --include "<variant>/*"`) and start the server with `HF_HUB_OFFLINE=1`. Otherwise `snapshot_download` pulls the whole 118.5 GB suite to run a single variant.
 - [ ] Pin `mme_vla_suite`. The server imports it from a runtime clone of `robomme_policy_learning` at `main`, while openpi itself is pinned to `ecf086c`. Pre-clone at `ecf086c` as in §2.1, on any platform.
-- [ ] Settle `chunk_size` before the full runs. `_base.yaml` sets 16, while the harness report and the server's default use 10. Check the RoboMME eval code.
+- [x] `chunk_size` settled: **16**, as shipped in `_base.yaml`. MME-VLA's own eval client executes 16 actions per inference (`examples/robomme/eval.py` passes `exec_horizon=obs_horizon`, and `utils.py` asserts it is 16). The "chunk_size=10" in the harness's report is the server script's default, not the value its config sets.
 
 ### 2.3 Smoke test (baseline)
 
