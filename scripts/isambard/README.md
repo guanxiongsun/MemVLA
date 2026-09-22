@@ -1,31 +1,42 @@
 # MemVLA baselines on Isambard-AI
 
-Everything lives under `/projects/b5cs/memvla` (shared with the project); per-user caches sit in
-`$SCRATCHDIR/memvla-cache`, and nothing is written to `$HOME`. Start a session with:
+Code is this git repo, checked out at `~/code/MemVLA` on Isambard. Everything large —
+environments, checkpoints, results — lives on project storage under `/projects/b5cs/memvla`,
+and per-user caches on scratch, because `$HOME` is capped at 100 GiB. Start a session with:
 
 ```bash
 clifton auth && ssh b5cs.aip2.isambard         # the certificate lasts 12 h
-source /projects/b5cs/memvla/scripts/isambard/env.sh
+cd ~/code/MemVLA && source scripts/isambard/env.sh
 ```
 
 ## What is installed
 
-| Path under `/projects/b5cs/memvla` | Contents |
+In the repo (`$MEMVLA_REPO`, default `~/code/MemVLA`), gitignored and recreated by
+`01_fetch_code.sh`, each on a local branch `memvla-base` at its pinned commit:
+
+| Path | Contents |
 |---|---|
-| `code/vla-evaluation-harness` | AllenAI eval harness, tag v0.7.0 (`6cc3e1b`) |
-| `code/robomme_benchmark` | RoboMME benchmark, `f2b540e` — the commit the harness validated against |
-| `code/robomme_policy_learning` | MME-VLA policies (openpi fork), `ecf086c` — the harness's pin |
-| `code/ManiSkill` | RoboMME's ManiSkill fork, `07be6fb` |
-| `code/MPlib` | motion planner, tag v0.1.1, compiled here for ARM |
+| `third_party/vla-evaluation-harness` | AllenAI eval harness, tag v0.7.0 (`6cc3e1b`) |
+| `third_party/robomme_benchmark` | RoboMME benchmark, `f2b540e` — the commit the harness validated against |
+| `third_party/robomme_policy_learning` | MME-VLA policies (openpi fork), `ecf086c` — the harness's pin |
+| `third_party/ManiSkill` | RoboMME's ManiSkill fork, `07be6fb` |
+| `third_party/MPlib` | motion planner, tag v0.1.1, compiled here for ARM |
+
+On project storage (`$MEMVLA_ROOT`, `/projects/b5cs/memvla`):
+
+| Path | Contents |
+|---|---|
 | `envs/robomme` | simulator env (Python 3.11): SAPIEN 3.0.3, ManiSkill, RoboMME, mplib, harness client |
 | `envs/lavapipe` | Mesa 26.2.1 software Vulkan, used for rendering |
 | `ckpts/<variant>/79999` | unpacked checkpoints: `pi05_baseline`, `perceptual-framesamp-modul`, `recurrent-ttt-expert` |
 | `hf/` | Hugging Face cache holding the downloaded checkpoint zips |
 | `results/`, `logs/` | evaluation outputs and job logs |
 
-Each repo sits on a local branch `memvla-base` at the pinned commit. The model-server env
-(JAX 0.5.3 with CUDA 12, plus the openpi fork) is built by uv and cached under
-`$SCRATCHDIR/memvla-cache/uv`; `vla-eval serve` picks it up automatically.
+The model-server env (JAX 0.5.3 with CUDA 12, plus the openpi fork) is built by uv and cached
+under `$SCRATCHDIR/memvla-cache/uv`; `vla-eval serve` picks it up automatically.
+
+Moving the repo elsewhere is fine: set `MEMVLA_REPO` before sourcing `env.sh`, then re-run
+`02_model_env.sh` and `04_sim_env.sh install` so the editable installs follow it.
 
 ## Running an evaluation
 
@@ -60,6 +71,8 @@ Hugging Face.
 ## Rebuilding from scratch
 
 ```bash
+git clone git@github.com:guanxiongsun/MemVLA.git ~/code/MemVLA      # login node
+cd ~/code/MemVLA && source scripts/isambard/env.sh
 scripts/isambard/01_fetch_code.sh                                   # login node
 scripts/isambard/02_model_env.sh                                    # login node
 scripts/isambard/03_download_checkpoints.sh                         # login node, ~36 GB

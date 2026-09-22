@@ -76,12 +76,12 @@ The environment lives in `/projects/b5cs/memvla`, built by the scripts in [`scri
 
 ```bash
 clifton auth && ssh b5cs.aip2.isambard
-source /projects/b5cs/memvla/scripts/isambard/env.sh
+cd ~/code/MemVLA && source scripts/isambard/env.sh
 # end-to-end check, about 5 minutes
 sbatch --time=00:20:00 scripts/isambard/eval.sbatch pi05_baseline counting "[PickXtimes]" 2 1
 ```
 
-- Code pinned to the commits harness v0.7.0 was validated against: harness `6cc3e1b`, RoboMME `f2b540e`, MME-VLA `ecf086c`, ManiSkill fork `07be6fb`, MPlib `v0.1.1`.
+- This repo is checked out at `~/code/MemVLA`; the upstream baselines sit in `third_party/`, gitignored and pinned by `01_fetch_code.sh` to the commits harness v0.7.0 was validated against: harness `6cc3e1b`, RoboMME `f2b540e`, MME-VLA `ecf086c`, ManiSkill fork `07be6fb`, MPlib `v0.1.1`. Environments, checkpoints and results stay on project storage.
 - Two Python environments: the simulator (SAPIEN 3.0.3, ManiSkill, RoboMME, mplib, harness client) and the model server built by uv (JAX 0.5.3 with CUDA 12, openpi fork).
 - Checkpoints downloaded and unpacked: π0.5 baseline, FrameSamp+Modulator, TTT-Expert.
 - Verified on a GH200: the baseline on `PickXtimes` and FrameSamp+Modulator on `VideoUnmask`, the latter with its conditioning video and memory active. The simulator runs at ~92 ms/step on the CPU renderer, ~174 ms/step with the model in the loop, so a 1300-step episode takes under 4 minutes.
@@ -111,7 +111,8 @@ Nothing is backed up, and project storage is deleted when the project ends. `$HO
 
 | Location | Holds |
 |---|---|
-| `$PROJECTDIR/memvla/` | `code/`, `envs/`, `ckpts/` unpacked checkpoints, `hf/` downloads, `results/`, `logs/`, `scripts/` |
+| `~/code/MemVLA` | This repo, with the pinned upstream checkouts in `third_party/` (gitignored) |
+| `$PROJECTDIR/memvla/` | `envs/`, `ckpts/` unpacked checkpoints, `hf/` downloads, `results/`, `logs/` |
 | `$SCRATCHDIR/memvla-cache/` | Per-user uv, harness and JAX caches |
 | `$LOCALDIR` | Per-job SQLite recording and videos, copied out at job end |
 
@@ -129,7 +130,7 @@ Budget about 24 GB per checkpoint variant: the zip plus its unpacked copy.
 ```text
 .
 ├── README.md
-├── third_party/vla-evaluation-harness   # git submodule, pinned tag
+├── third_party/ # upstream checkouts at pinned commits (gitignored; 01_fetch_code.sh recreates them)
 ├── configs/     # our copies/overrides of harness configs
 ├── scripts/     # launch, eval and analysis helpers
 │   └── isambard/  # the Isambard-AI environment: setup scripts, env.sh, eval.sbatch (see its README)

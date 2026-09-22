@@ -1,11 +1,13 @@
 # MemVLA on Isambard-AI. Source this in every shell and job:
-#   source /projects/b5cs/memvla/scripts/isambard/env.sh
+#   source ~/code/MemVLA/scripts/isambard/env.sh
 #
-# Layout: code, envs, checkpoints and results live under $MEMVLA_ROOT (shared with the
-# project); download caches are per-user under $SCRATCHDIR. Nothing goes in $HOME (100 GiB).
+# Code is this git repo ($MEMVLA_REPO); the pinned upstream checkouts sit in third_party/ and
+# are gitignored. Everything large — environments, checkpoints, results — stays on project
+# storage ($MEMVLA_ROOT), and per-user caches on scratch, because $HOME is capped at 100 GiB.
 
+export MEMVLA_REPO=${MEMVLA_REPO:-$HOME/code/MemVLA}
+export MEMVLA_CODE=$MEMVLA_REPO/third_party
 export MEMVLA_ROOT=$PROJECTDIR/memvla
-export MEMVLA_CODE=$MEMVLA_ROOT/code
 export MEMVLA_CACHE=$SCRATCHDIR/memvla-cache
 
 export HF_HOME=$MEMVLA_ROOT/hf                  # model checkpoints

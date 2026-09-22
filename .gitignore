@@ -1,0 +1,8 @@
+# Pinned upstream checkouts; recreated by scripts/isambard/01_fetch_code.sh, which holds the pins
+/third_party/
+
+# Raw evaluation outputs live on project storage ($MEMVLA_ROOT/results); only summaries are committed
+/results/
+
+__pycache__/
+*.pyc

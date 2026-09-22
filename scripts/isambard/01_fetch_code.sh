@@ -1,9 +1,10 @@
 #!/bin/bash
-# Clone the baseline code at the commits vla-evaluation-harness v0.7.0 was validated with.
-# Each repo gets a local branch `memvla-base` at the pinned commit. Safe to re-run.
+# Clone the upstream baselines into third_party/ at the commits vla-evaluation-harness v0.7.0
+# was validated with. Each repo gets a local branch `memvla-base` at the pinned commit; the
+# checkouts are gitignored, and these pins are the record. Safe to re-run.
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
-mkdir -p "$MEMVLA_CODE" "$MEMVLA_ROOT"/{bin,envs,hf,maniskill,results,wheels} "$MEMVLA_CACHE"
+mkdir -p "$MEMVLA_CODE" "$MEMVLA_ROOT"/{bin,ckpts,envs,hf,logs,maniskill,results,wheels} "$MEMVLA_CACHE"
 cd "$MEMVLA_CODE"
 
 clone_at() {  # <dir> <url> <tag or commit>

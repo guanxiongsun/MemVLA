@@ -3,7 +3,7 @@
 #SBATCH --nodes=1
 #SBATCH --gpus=1                  # one GH200: H100 96 GB + 72 Grace cores + ~115 GiB RAM
 #SBATCH --time=04:00:00
-#SBATCH --output=/projects/b5cs/memvla/logs/eval_%j.out
+#SBATCH --output=/projects/b5cs/memvla/logs/eval_%j.out   # Slurm cannot expand vars here; edit for another project
 # RoboMME evaluation of one MME-VLA checkpoint through vla-evaluation-harness on one GH200.
 #
 #   sbatch eval.sbatch MODEL SUITE [TASKS] [EPISODES] [SHARDS]
@@ -21,7 +21,7 @@
 set -euo pipefail
 MODEL=${1:?model config name}; SUITE=${2:?suite config name}
 TASKS=${3:-}; EPISODES=${4:-50}; SHARDS=${5:-4}
-source /projects/b5cs/memvla/scripts/isambard/env.sh
+source "${MEMVLA_REPO:-$HOME/code/MemVLA}/scripts/isambard/env.sh"
 export HF_HUB_OFFLINE=1
 cd "$MEMVLA_CODE/vla-evaluation-harness"
 SIM_BIN=$MEMVLA_SIM_ENV/bin
