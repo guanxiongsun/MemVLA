@@ -43,11 +43,17 @@ VARIANT=$(basename "$(awk '$1 == "checkpoint:" { print $2 }' "$MODEL_CFG")")
 CKPT=$MEMVLA_ROOT/ckpts/$VARIANT/79999
 [ -d "$CKPT/params" ] || { echo "no checkpoint at $CKPT: run 03_download_checkpoints.sh $VARIANT" >&2; exit 1; }
 
+# Mesa's lavapipe keeps its memory in anonymous files under $XDG_RUNTIME_DIR. The per-user
+# /run/user/<uid> behind it (and behind $LOCALDIR) can vanish during a batch job on these nodes,
+# which killed jobs 6833513 and 6833653, so each job gets its own on node-local tmpfs.
+export XDG_RUNTIME_DIR=/dev/shm/memvla-$SLURM_JOB_ID TMPDIR=/dev/shm/memvla-$SLURM_JOB_ID
+mkdir -p -m 700 "$XDG_RUNTIME_DIR"
+
 # Model servers on the GPU, one per shard, sharing its memory. Started one at a time: each load
 # briefly holds the full weights in host RAM.
 export XLA_PYTHON_CLIENT_MEM_FRACTION=$(awk -v k="$SHARDS" 'BEGIN { printf "%.3f", 0.9 / k }')
 servers=()
-trap 'kill "${servers[@]}" 2>/dev/null || true' EXIT
+trap 'kill "${servers[@]}" 2>/dev/null || true; rm -rf "$XDG_RUNTIME_DIR"' EXIT
 for i in $(seq 0 $((SHARDS - 1))); do
     uv run vla-eval serve -c "$MODEL_CFG" --arg "checkpoint=$CKPT" \
         --address "127.0.0.1:$((BASE_PORT + i))" > "$LOGS/server_$i.log" 2>&1 &
