@@ -6,12 +6,14 @@
 #SBATCH --output=/projects/b5cs/memvla/logs/eval_%j.out   # Slurm cannot expand vars here; edit for another project
 # RoboMME evaluation of one MME-VLA checkpoint through vla-evaluation-harness on one GH200.
 #
-#   sbatch eval.sbatch MODEL SUITE [TASKS] [EPISODES] [SHARDS]
+#   sbatch eval.sbatch MODEL SUITE [TASKS] [EPISODES] [SHARDS] [EXTRA_RUN_ARGS...]
 #     MODEL     config in configs/model_servers/mme_vla/: pi05_baseline, framesamp_modul, ttt_expert, ...
 #     SUITE     config in configs/benchmarks/robomme/: counting, permanence, reference, imitation, eval
 #     TASKS     optional subset, e.g. "[VideoUnmask,ButtonUnmask]" (default: the whole suite)
 #     EPISODES  per task (default 50, the full RoboMME test split)
 #     SHARDS    parallel (model server, simulator) pairs (default 4)
+#     EXTRA_RUN_ARGS  passed to every `vla-eval run`, e.g. --param perturbation=shuffle
+#   RUN_TAG (env) is appended to the results folder name, to tell conditions apart.
 #
 # Every shard gets its own model server: memory variants keep a single memory per server process,
 # so shards sharing one server would overwrite each other's memory.
@@ -20,12 +22,12 @@
 # Quick end-to-end check (~5 min): sbatch --time=00:20:00 eval.sbatch pi05_baseline counting "[PickXtimes]" 2 1
 set -euo pipefail
 MODEL=${1:?model config name}; SUITE=${2:?suite config name}
-TASKS=${3:-}; EPISODES=${4:-50}; SHARDS=${5:-4}
+TASKS=${3:-}; EPISODES=${4:-50}; SHARDS=${5:-4}; EXTRA_RUN_ARGS=("${@:6}")
 source "${MEMVLA_REPO:-$HOME/code/MemVLA}/scripts/isambard/env.sh"
 export HF_HUB_OFFLINE=1
 cd "$MEMVLA_CODE/vla-evaluation-harness"
 SIM_BIN=$MEMVLA_SIM_ENV/bin
-NAME=${MODEL}_${SUITE}_${SLURM_JOB_ID}
+NAME=${MODEL}_${SUITE}${RUN_TAG:+_$RUN_TAG}_${SLURM_JOB_ID}
 OUT=$LOCALDIR/$NAME                      # SQLite on Lustre is unreliable; copy out at the end
 LOGS=$MEMVLA_ROOT/logs/$NAME
 mkdir -p "$LOGS"
@@ -55,11 +57,12 @@ echo "$SHARDS servers healthy after ${SECONDS}s"
 nvidia-smi --query-compute-apps=pid,used_memory --format=csv
 free -g | head -2
 
-# Simulators on the CPU, with the GPU hidden (see smoke_test.sbatch)
+# Simulators on the CPU, with the GPU hidden (why: scripts/isambard/README.md)
 EVAL_ID=$(cat /proc/sys/kernel/random/uuid)
 args=(--no-docker -c "configs/benchmarks/robomme/$SUITE.yaml" --benchmark-field "episodes_per_task=$EPISODES"
       --eval-id "$EVAL_ID" --num-shards "$SHARDS" --output-dir "$OUT" --record-video)
 [ -z "$TASKS" ] || args+=(--param "tasks=$TASKS")
+args+=("${EXTRA_RUN_ARGS[@]}")
 shards=()
 for i in $(seq 0 $((SHARDS - 1))); do
     CUDA_VISIBLE_DEVICES= "$SIM_BIN/vla-eval" run "${args[@]}" --shard-id "$i" \
