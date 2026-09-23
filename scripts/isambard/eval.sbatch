@@ -28,7 +28,10 @@ export HF_HUB_OFFLINE=1
 cd "$MEMVLA_CODE/vla-evaluation-harness"
 SIM_BIN=$MEMVLA_SIM_ENV/bin
 NAME=${MODEL}_${SUITE}${RUN_TAG:+_$RUN_TAG}_${SLURM_JOB_ID}
-OUT=$LOCALDIR/$NAME                      # SQLite on Lustre is unreliable; copy out at the end
+# Straight to project storage: its Lustre is mounted with `flock`, so the shards can share one
+# SQLite recording. The node-local $LOCALDIR is not safe for batch jobs here: its runtime
+# directory can vanish mid-job, which failed job 6833513.
+OUT=$MEMVLA_ROOT/results/$NAME
 LOGS=$MEMVLA_ROOT/logs/$NAME
 mkdir -p "$LOGS"
 BASE_PORT=$((20000 + (SLURM_JOB_ID % 1000) * 16))   # the node may be shared with other jobs
@@ -73,6 +76,5 @@ failed=0
 for p in "${shards[@]}"; do wait "$p" || failed=$((failed + 1)); done
 
 "$SIM_BIN/vla-eval" export "$OUT/recording-$EVAL_ID.sqlite"
-cp -r "$OUT" "$MEMVLA_ROOT/results/"
-echo "results: $MEMVLA_ROOT/results/$NAME  (elapsed ${SECONDS}s, $failed of $SHARDS shards failed)"
+echo "results: $OUT  (elapsed ${SECONDS}s, $failed of $SHARDS shards failed)"
 [ "$failed" -eq 0 ]

@@ -114,7 +114,7 @@ Nothing is backed up, and project storage is deleted when the project ends. `$HO
 | `~/code/MemVLA` | This repo, with the pinned upstream checkouts in `third_party/` (gitignored) |
 | `$PROJECTDIR/memvla/` | `envs/`, `ckpts/` unpacked checkpoints, `hf/` downloads, `results/`, `logs/` |
 | `$SCRATCHDIR/memvla-cache/` | Per-user uv, harness and JAX caches |
-| `$LOCALDIR` | Per-job SQLite recording and videos, copied out at job end |
+| `$PROJECTDIR/memvla/results/` | Each job writes its SQLite recording and videos straight here (Lustre is mounted with `flock`, so shards can share one SQLite file) |
 
 Budget about 24 GB per checkpoint variant: the zip plus its unpacked copy.
 
