@@ -64,6 +64,58 @@ $MEMVLA_SIM_ENV/bin/python experiments/memory_probes/analyze.py $MEMVLA_ROOT/res
     --baseline $MEMVLA_ROOT/results/pi05_baseline_permanence_6798706
 ```
 
-## Results
+## Results (23 Sep 2026, jobs 6833867–6833878)
 
-Pending: jobs 6833867–6833878.
+600 episodes, none errored; every perturbed episode logged its perturbation. 6.4 GPU-hours.
+Δ is the paired change against the clean run on the same episodes; "lost / gained" counts the
+episodes that flipped; p is an exact McNemar test.
+
+| Condition | `VideoUnmask` | Δ (lost / gained, p) | `VideoUnmaskSwap` | Δ (lost / gained, p) |
+|---|---|---|---|---|
+| `none` | 30% (15/50) | — | 10% (5/50) | — |
+| `none_rep` | 30% | ±0 (0 / 0) | 10% | ±0 (0 / 0) |
+| `blank` | 18% | −12 pp (7 / 1, p = 0.07) | 8% | −2 pp (3 / 2, p = 1.0) |
+| `shuffle` | 26% | −4 pp (4 / 2, p = 0.69) | 10% | ±0 (2 / 2, p = 1.0) |
+| `shuffle_kept` | 22% | −8 pp (7 / 3, p = 0.34) | 8% | −2 pp (3 / 2, p = 1.0) |
+| `reverse` | 20% | −10 pp (6 / 1, p = 0.13) | 12% | +2 pp (1 / 2, p = 1.0) |
+| π0.5, no memory | 26% | −4 pp (13 / 11, p = 0.84) | 20% | +10 pp (4 / 9, p = 0.27) |
+
+### What the data show
+
+1. **The pipeline is deterministic.** The clean rerun matches episode for episode on both tasks,
+   so every flipped episode under a perturbation is caused by the perturbation, not noise.
+2. **Memory input is live.** On `VideoUnmask`, blanking memory loses 7 episodes and gains 1
+   (−12 pp, p = 0.07). The model does read the conditioning video.
+3. **On the order-critical task there is no memory benefit to remove.** Clean FrameSamp solves
+   5 of 50 `VideoUnmaskSwap` episodes, fewer than the memoryless π0.5 (10 of 50). A perturbation
+   can only destroy what memory contributes, and here it contributes nothing measurable. So the
+   flat results on Swap are a floor effect: they say nothing about whether the model uses order.
+   **They are not evidence for the bag-of-features hypothesis.**
+4. **On `VideoUnmask`, order perturbations lower success, none significantly.** Reversal
+   (−10 pp) costs nearly as much as blanking (−12 pp), although it preserves every fact in the
+   video. That hints the model reads memory by position — for instance, taking the latest frames
+   as the current state — rather than by what the frames mean. With 7 or fewer flipped episodes
+   per comparison, this is suggestive only.
+5. **Under this protocol, the paper's memory advantage does not appear.** FrameSamp scores 30%
+   vs π0.5's 26% on `VideoUnmask`, and below it on Swap. The paper reports 36.0% vs 13.7% on the
+   Permanence suite. The memory-feeding protocol (video once, versus MME-VLA's streaming) is the
+   prime suspect.
+
+### Verdict
+
+The hypothesis is neither supported nor refuted. The task built to test it sits at floor for this
+model under this protocol, and the control task is too underpowered to separate order from
+content.
+
+### What would make it decisive
+
+- **Settle the memory protocol first**, then rerun `none` on `VideoUnmaskSwap`. The probe is only
+  meaningful once clean memory beats no memory on an order-critical task.
+- **Measure the choice, not just success.** Log which bin the robot lifts on Swap. If it goes to
+  where the target cube started, before the swaps, memory holds content without dynamics: a direct
+  test of the hypothesis that does not depend on the success rate.
+- **More power.** The pipeline is deterministic, so paired designs are cheap, but 50 test
+  episodes cap each comparison at a handful of flips. The `val` and `train` splits in the repo
+  hold only 3 episodes per task, so more seeds need a custom episode file: RoboMME's env builder
+  accepts `override_metadata_path`, which the probe benchmark would have to pass through. Use such
+  seeds for probing only, never for reported test numbers.
