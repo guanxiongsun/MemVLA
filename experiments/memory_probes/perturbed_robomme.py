@@ -26,7 +26,8 @@ from typing import Any
 import numpy as np
 from vla_eval.benchmarks.robomme.benchmark import RoboMMEBenchmark
 
-logger = logging.getLogger(__name__)
+# Under the harness's namespace: it only shows vla_eval.* loggers in the shard logs
+logger = logging.getLogger("vla_eval.memory_probes")
 
 PERTURBATIONS = ("none", "blank", "shuffle", "shuffle_kept", "reverse")
 
@@ -76,12 +77,15 @@ class PerturbedRoboMMEBenchmark(RoboMMEBenchmark):
         if self.perturbation == "blank":
             self._video_frames = [np.zeros_like(f) for f in self._video_frames]
             self._wrist_video_frames = [np.zeros_like(f) for f in wrist]
+            detail = "all frames black"
         else:
             order = frame_order(n_frames, self.perturbation, rng)
             self._video_frames = [self._video_frames[i] for i in order]
             if len(wrist) == n_frames:
                 self._wrist_video_frames = [wrist[i] for i in order]
+            # What FrameSamp will load: the source frame at each kept position, in memory order
+            detail = f"kept frames now show source frames {[order[i] for i in kept_indices(n_frames)]}"
 
-        logger.info("video perturbation %s: %s episode %s, %d frames",
-                    self.perturbation, task["env_id"], task.get("episode_idx"), n_frames)
+        logger.info("video perturbation %s: %s episode %s, %d frames; %s",
+                    self.perturbation, task["env_id"], task.get("episode_idx"), n_frames, detail)
         return raw_obs
