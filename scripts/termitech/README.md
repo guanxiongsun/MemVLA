@@ -34,6 +34,7 @@ location.
 scripts/termitech/01_fetch_code.sh      # upstream code at the pinned commits; uv, micromamba
 scripts/termitech/02_download.sh        # assets + π0.5 checkpoint, 93 GB, resumable
 scripts/termitech/03_model_env.sh       # harness CLI and π0.5 server envs
+scripts/termitech/05_isaacsim_wheels.sh # Isaac Sim's NVIDIA-only wheels, 4.7 GB, ~5 h (see below)
 ACCEPT_NVIDIA_EULA=YES scripts/termitech/04_robodojo_env.sh   # only after reading NVIDIA's EULA
 GPU_SIM=1 GPU_MODEL=3 scripts/termitech/smoke.sh               # one short episode end to end
 ```
@@ -49,11 +50,22 @@ Run long steps detached, since there is no scheduler here:
   driver's `/usr/share/vulkan/icd.d/nvidia_icd.json`.
 - **Pinned submodules.** Upstream's `install.sh` updates submodules with `--remote`, which follows
   moving branch heads; these scripts keep the commits RoboDojo `ee67a14` records.
-- **Hugging Face through its mirror.** `huggingface.co` is blocked from this machine and
-  `hf-mirror.com` is not. `hf download --include` never finishes here, because the mirror's
-  paginated listing links back to huggingface.co, so `02_download.sh` lists files in one call and
-  fetches them one by one. The mirror rate-limits bursts (HTTP 429); the downloader backs off and
-  resumes.
+- **Download sources, measured from this machine** (mainland China). Domestic CDNs are fast and
+  international ones crawl, so each download goes where it is fastest:
+
+  | Source | Speed | Used for |
+  |---|---|---|
+  | ModelScope | ~12 MB/s over 16 connections | RoboDojo assets and checkpoint (same dataset, hash-checked against the pinned Hugging Face revision) |
+  | Aliyun PyPI mirror | ~5 MB/s | PyPI packages in the Isaac Sim env |
+  | hf-mirror.com | ~2.5 MB/s, rate-limited | fallback for the assets; Hugging Face API calls |
+  | download.pytorch.org | ~2.3 MB/s per connection | PyTorch cu128 |
+  | PyPI's own CDN | ~0.1 MB/s | avoided |
+  | NVIDIA's index (redirects to pypi.nvidia.cn) | ~0.25 MB/s in total | Isaac Sim's 25 wheels, via `aria2c` in `05_isaacsim_wheels.sh` |
+
+  `huggingface.co` itself is blocked. Its mirror cannot run `hf download --include` here (the
+  paginated listing links back to huggingface.co), so the file list comes from one API call.
+  Isaac Sim's wheels exist only on NVIDIA's index; PyPI holds 1 KB placeholders. They are pinned
+  with their SHA-256 in `isaacsim-5.1.0-wheels.txt`.
 - **EULA.** Installing and running Isaac Sim means accepting NVIDIA's Isaac Sim EULA and
   Omniverse privacy terms (https://docs.omniverse.nvidia.com/eula/). Upstream accepts them
   silently; `04_robodojo_env.sh` refuses until `ACCEPT_NVIDIA_EULA=YES` is given.

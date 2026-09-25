@@ -22,11 +22,17 @@ export CUDA_HOME=/usr/local/cuda-12.4 PATH=/usr/local/cuda-12.4/bin:$PATH FORCE_
 [ -x "$ROBODOJO_ENV/bin/python" ] || micromamba create -y -p "$ROBODOJO_ENV" --no-rc \
     -c conda-forge --override-channels python=3.11 pip libvulkan-loader libglu vulkan-tools cmake ninja ffmpeg
 set +u; robodojo_env; set -u          # activation scripts are not nounset-clean
-# uv instead of pip for installs: same packages and pins, but downloads run in parallel. Per
-# connection this machine gets ~2.5 MB/s, in aggregate several times that, and Isaac Sim alone is
-# ~10 GB of wheels. unsafe-best-match resolves across PyPI and NVIDIA's index the way pip does.
+# Network from mainland China: PyPI's CDN gives this machine ~0.1 MB/s and Aliyun's PyPI mirror
+# ~5 MB/s, so both uv and pip (Isaac Lab's installer calls pip) use the mirror. Isaac Sim's own
+# wheels come from the local wheelhouse filled by 05_isaacsim_wheels.sh (NVIDIA's index is slower
+# still). uv replaces pip for installs: same packages and pins, parallel downloads.
+export UV_DEFAULT_INDEX=https://mirrors.aliyun.com/pypi/simple/ PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 export UV_HTTP_TIMEOUT=300 UV_INDEX_STRATEGY=unsafe-best-match
 pip() { uv pip install --quiet --python "$ROBODOJO_ENV/bin/python" "$@"; }
+WH=$MEMVLA_DATA/wheels/isaacsim-5.1.0
+# All 25 wheels present and none still in flight (aria2c keeps a .aria2 file beside partial ones)
+[ "$(ls "$WH"/*.whl 2>/dev/null | wc -l)" -eq 25 ] && ! ls "$WH"/*.aria2 >/dev/null 2>&1 \
+    || { echo "Isaac Sim wheels incomplete: run 05_isaacsim_wheels.sh first" >&2; exit 1; }
 pins=(numpy==1.26.0 packaging==23.0 typing_extensions==4.12.2 filelock==3.13.1 websockets==12.0
       click==8.1.7 psutil==5.9.8 wheel==0.45.1 starlette==0.45.3 scipy==1.15.3 warp-lang==1.11.0
       "onnx>=1.18,<1.22" "ipython<9" virtualenv==20.30.0)          # install.sh: pin_runtime_deps
@@ -38,7 +44,8 @@ pip opencv-python-headless==4.11.0.86 pillow matplotlib scipy==1.15.3 scikit-lea
 # install.sh: setup_isaacsim
 pip numpy==1.26.0 typing_extensions==4.12.2 filelock==3.13.1
 pip torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128
-pip "isaacsim[all,extscache]==5.1.0" --extra-index-url https://pypi.nvidia.com
+pip "$WH"/*.whl                                          # NVIDIA's wheels, verified, from disk
+pip "isaacsim[all,extscache]==5.1.0" --find-links "$WH"   # confirms the set; the rest is PyPI
 pip "${pins[@]}"
 # install.sh: setup_isaaclab, with "none" as in the Dockerfile (eval needs no RL frameworks)
 (cd third_party/IsaacLab && ./isaaclab.sh --install none)
