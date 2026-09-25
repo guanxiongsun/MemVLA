@@ -17,14 +17,16 @@ cd ~/code/MemVLA && source scripts/termitech/env.sh
 | `~/code/MemVLA` | this repo |
 | `third_party/vla-evaluation-harness` | harness v0.7.0 (`6cc3e1b`), same as on Isambard |
 | `third_party/RoboDojo` | RoboDojo `ee67a14`, the harness's pin, with submodules at their recorded commits: IsaacLab `afca7b0`, cuRobo `d17b54c`, XPolicyLab `432f82b` |
-| `~/memvla-data/envs/robodojo` | simulator env: Python 3.11, torch 2.7 (cu128), Isaac Sim 5.1, Isaac Lab, cuRobo, harness client |
-| `~/memvla-data/robodojo/Assets` | RoboDojo assets, 86 GB, dataset revision `43dacb1` |
-| `~/memvla-data/robodojo/ckpt/.../RoboDojo-sim-arx_x5-joint-0/59999` | released π0.5 checkpoint, training seed 0 |
-| `~/memvla-data/{results,logs}` | outputs |
-| `~/memvla-data/cache/uv` | uv cache, including the π0.5 model-server env (JAX, XPolicyLab's openpi fork) |
+| `$MEMVLA_DATA/envs/robodojo` | simulator env: Python 3.11, torch 2.7 (cu128), Isaac Sim 5.1, Isaac Lab, cuRobo, harness client |
+| `$MEMVLA_DATA/robodojo/Assets` | RoboDojo assets, 86 GB, dataset revision `43dacb1` |
+| `$MEMVLA_DATA/robodojo/ckpt/.../RoboDojo-sim-arx_x5-joint-0/59999` | released π0.5 checkpoint, training seed 0 |
+| `$MEMVLA_DATA/{results,logs}` | outputs |
+| `$MEMVLA_DATA/cache/uv` | uv cache, including the π0.5 model-server env (JAX, XPolicyLab's openpi fork) |
 
-`MEMVLA_DATA` defaults to `~/memvla-data` on the system disk; `/data` is not writable for this
-account. Set `MEMVLA_DATA` before sourcing `env.sh` to move it.
+`MEMVLA_DATA` is `/data/sgx/memvla-data` on the 5 TB data disk (`/data/sgx` is private to this
+account, like the other users' folders there); `~/memvla-data` is a symlink to it, so paths
+recorded before the move still work. Set `MEMVLA_DATA` before sourcing `env.sh` to use another
+location.
 
 ## Steps
 
@@ -37,7 +39,7 @@ GPU_SIM=1 GPU_MODEL=3 scripts/termitech/smoke.sh               # one short episo
 ```
 
 Run long steps detached, since there is no scheduler here:
-`setsid nohup <script> > ~/memvla-data/logs/<name>.log 2>&1 < /dev/null &`.
+`setsid nohup <script> > $MEMVLA_DATA/logs/<name>.log 2>&1 < /dev/null &`.
 
 ## Differences from RoboDojo's own install
 

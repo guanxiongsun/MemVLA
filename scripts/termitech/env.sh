@@ -8,7 +8,7 @@
 
 export MEMVLA_REPO=${MEMVLA_REPO:-$HOME/code/MemVLA}
 export MEMVLA_CODE=$MEMVLA_REPO/third_party
-export MEMVLA_DATA=${MEMVLA_DATA:-$HOME/memvla-data}
+export MEMVLA_DATA=${MEMVLA_DATA:-/data/$USER/memvla-data}   # the data disk; ~/memvla-data links here
 export MEMVLA_CACHE=$MEMVLA_DATA/cache
 
 # The server is in mainland China: huggingface.co is blocked, its mirror is reachable
