@@ -22,7 +22,11 @@ export CUDA_HOME=/usr/local/cuda-12.4 PATH=/usr/local/cuda-12.4/bin:$PATH FORCE_
 [ -x "$ROBODOJO_ENV/bin/python" ] || micromamba create -y -p "$ROBODOJO_ENV" --no-rc \
     -c conda-forge --override-channels python=3.11 pip libvulkan-loader libglu vulkan-tools cmake ninja ffmpeg
 set +u; robodojo_env; set -u          # activation scripts are not nounset-clean
-pip() { python -m pip install --quiet "$@"; }
+# uv instead of pip for installs: same packages and pins, but downloads run in parallel. Per
+# connection this machine gets ~2.5 MB/s, in aggregate several times that, and Isaac Sim alone is
+# ~10 GB of wheels. unsafe-best-match resolves across PyPI and NVIDIA's index the way pip does.
+export UV_HTTP_TIMEOUT=300 UV_INDEX_STRATEGY=unsafe-best-match
+pip() { uv pip install --quiet --python "$ROBODOJO_ENV/bin/python" "$@"; }
 pins=(numpy==1.26.0 packaging==23.0 typing_extensions==4.12.2 filelock==3.13.1 websockets==12.0
       click==8.1.7 psutil==5.9.8 wheel==0.45.1 starlette==0.45.3 scipy==1.15.3 warp-lang==1.11.0
       "onnx>=1.18,<1.22" "ipython<9" virtualenv==20.30.0)          # install.sh: pin_runtime_deps
