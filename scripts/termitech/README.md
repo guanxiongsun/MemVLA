@@ -18,8 +18,8 @@ cd ~/code/MemVLA && source scripts/termitech/env.sh
 | `third_party/vla-evaluation-harness` | harness v0.7.0 (`6cc3e1b`), same as on Isambard |
 | `third_party/RoboDojo` | RoboDojo `ee67a14`, the harness's pin, with submodules at their recorded commits: IsaacLab `afca7b0`, cuRobo `d17b54c`, XPolicyLab `432f82b` |
 | `$MEMVLA_DATA/envs/robodojo` | simulator env: Python 3.11, torch 2.7 (cu128), Isaac Sim 5.1, Isaac Lab, cuRobo, harness client |
-| `$MEMVLA_DATA/robodojo/Assets` | RoboDojo assets, 86 GB, dataset revision `43dacb1` |
-| `$MEMVLA_DATA/robodojo/ckpt/.../RoboDojo-sim-arx_x5-joint-0/59999` | released π0.5 checkpoint, training seed 0 |
+| `$MEMVLA_DATA/robodojo/Assets` | RoboDojo assets, 41 GB, dataset revision `43dacb1` |
+| `$MEMVLA_DATA/robodojo/ckpt/.../RoboDojo-sim-arx_x5-joint-0/59999` | released π0.5 checkpoint, training seed 0: `params` 12 GB, plus `train_state` 32 GB (optimizer state, only needed to resume training) |
 | `$MEMVLA_DATA/{results,logs}` | outputs |
 | `$MEMVLA_DATA/cache/uv` | uv cache, including the π0.5 model-server env (JAX, XPolicyLab's openpi fork) |
 
@@ -32,7 +32,7 @@ location.
 
 ```bash
 scripts/termitech/01_fetch_code.sh      # upstream code at the pinned commits; uv, micromamba
-scripts/termitech/02_download.sh        # assets + π0.5 checkpoint, 93 GB, resumable
+scripts/termitech/02_download.sh        # assets + π0.5 checkpoint, 86 GB, resumable
 scripts/termitech/03_model_env.sh       # harness CLI and π0.5 server envs
 scripts/termitech/05_isaacsim_wheels.sh # Isaac Sim's NVIDIA-only wheels, 4.7 GB, ~5 h (see below)
 ACCEPT_NVIDIA_EULA=YES scripts/termitech/04_robodojo_env.sh   # only after reading NVIDIA's EULA

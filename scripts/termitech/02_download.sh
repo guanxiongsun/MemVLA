@@ -1,6 +1,7 @@
 #!/bin/bash
-# RoboDojo assets (86 GB) and the released π0.5 checkpoint (training seed 0, ~7 GB), pinned to the
-# Hugging Face dataset revision below and verified file by file against it (size and SHA-256).
+# RoboDojo assets (41 GB) and the released π0.5 checkpoint (training seed 0, 45 GB: 12 GB of params
+# and 32 GB of optimizer state), 86 GB in all, pinned to the Hugging Face dataset revision below and
+# verified file by file against it (size and SHA-256).
 # Same files as upstream's scripts/init_assets.sh, which needs git-lfs and huggingface.co.
 #
 # Transport: huggingface.co is blocked from this machine, and its mirror serves ~2.5 MB/s. ModelScope

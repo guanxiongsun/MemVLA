@@ -22,7 +22,7 @@ export PATH=$MEMVLA_DATA/bin:$HOME/.local/bin:$PATH
 # RoboDojo
 export ROBODOJO_ROOT=$MEMVLA_CODE/RoboDojo
 export ROBODOJO_ENV=$MEMVLA_DATA/envs/robodojo            # Isaac Sim 5.1 + Isaac Lab + cuRobo + harness
-export ROBODOJO_ASSETS=$MEMVLA_DATA/robodojo/Assets       # ~90 GB, Apache-2.0
+export ROBODOJO_ASSETS=$MEMVLA_DATA/robodojo/Assets       # 41 GB, Apache-2.0
 export ROBODOJO_PI05_CKPT=$MEMVLA_DATA/robodojo/ckpt/RoboDojo/Pi_05/RoboDojo-sim-arx_x5-joint-0/59999
 
 robodojo_env() {
