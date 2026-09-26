@@ -70,6 +70,28 @@ Run long steps detached, since there is no scheduler here:
   Omniverse privacy terms (https://docs.omniverse.nvidia.com/eula/). Upstream accepts them
   silently; `04_robodojo_env.sh` refuses until `ACCEPT_NVIDIA_EULA=YES` is given.
 
+## The two conflicts `pip check` reports
+
+Both come from upstream pins that contradict each other, so no set of versions satisfies them all.
+Neither matters for evaluation. This was checked on 26 Sep 2026 by running the smoke test with
+`PYTHONVERBOSE=1`, which logs every module the simulator loads.
+
+| Package | Installed | Conflicting requirements | Used during evaluation |
+|---|---|---|---|
+| starlette | 0.45.3: RoboDojo's pin, and the version Isaac Sim bundles | Isaac Lab wants `==0.49.1` (listed under "livestream"); Isaac Sim pins fastapi 0.115.7, which needs `<0.46` | never imported |
+| websockets | 17.1 | Isaac Sim's kernel wants `==12.0`; the harness needs `>=13.0` | 17.1, by the harness client only |
+
+- Only Isaac Sim's web-service extensions use starlette, and none of them start in a headless
+  evaluation. The simulator opens no listening ports. 0.45.3 lacks denial-of-service fixes from
+  later releases, but those only matter for a web server reachable from the network.
+- Kit carries its own copies (websockets 12.0, starlette 0.45.3) in its `omni.kit.pip_archive`
+  extension and puts them on `sys.path` once Isaac Sim starts. The harness imports websockets
+  before starting Isaac Sim, so it keeps 17.1. If a harness update moved that import after Isaac
+  Sim starts, the client would get 12.0. For Behavior1K, the harness authors deleted Kit's copy to
+  avoid this.
+- The π0.5 server runs in its own environment with websockets 16.1. Client and server only need
+  to speak the WebSocket protocol, not share a library version.
+
 ## Running evaluations
 
 `smoke.sh` shows the pattern: the π0.5 server on one GPU, Isaac Sim on another, the harness in
