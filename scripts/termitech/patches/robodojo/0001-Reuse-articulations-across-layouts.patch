@@ -1,0 +1,181 @@
+From 98023f8ac39094380a22be846df90f9b2fcec446 Mon Sep 17 00:00:00 2001
+From: guanxiongsun <sungx.cs@gmail.com>
+Date: Sat, 26 Sep 2026 11:51:55 +0100
+Subject: [PATCH] Reuse articulations across layouts
+
+The scene manager builds articulations once, with the scene, and never
+respawns them, but every later layout gave its articulation entries
+fresh instance names. Those names matched no object, so each reset
+after the first failed in check_layout_stability (get_instance_pose on
+None) for any task with an articulation, among them press_by_number and
+swap_blocks, whose every entry is a SpringButton.
+
+Give a new layout's articulation entries the existing objects of the
+same model, move those to the new entries' poses and keep the others
+offscreen. A layout that needs a model the scene lacks, or other
+physics or visual settings, still fails, now with an error that says
+so.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ env/scene_manager/layout_manager.py       | 35 ++++++++++++++++++++-
+ env/scene_manager/objects/articulation.py | 18 +++++++++++
+ env/scene_manager/scene_manager.py        | 37 +++++++++++++++++++++--
+ 3 files changed, 87 insertions(+), 3 deletions(-)
+
+diff --git a/env/scene_manager/layout_manager.py b/env/scene_manager/layout_manager.py
+index a73dedc..b909efa 100644
+--- a/env/scene_manager/layout_manager.py
++++ b/env/scene_manager/layout_manager.py
+@@ -154,12 +154,18 @@ class LayoutManager:
+         if env_config is None:
+             return None
+         self.clear_layout_state([env_idx])
++        reused_articulations = set()
+         for key, value in env_config.items():
+             if key in ["Rigid", "Dynamic", "Geometry", "Articulation", "Garment", "Fluid"]:
+                 for cat, inst_list in value.items():
+                     for inst in inst_list:
+                         cat_idx = inst.get("category_idx", None)
+-                        prim_path, inst_name = self._generate_object_paths(env_idx, cat, cat_idx, type=key.lower())
++                        paths = None
++                        if key == "Articulation":
++                            paths = self._reuse_articulation_paths(env_idx, cat, cat_idx, reused_articulations)
++                        if paths is None:
++                            paths = self._generate_object_paths(env_idx, cat, cat_idx, type=key.lower())
++                        prim_path, inst_name = paths
+                         if key in ["Rigid", "Dynamic", "Garment", "Articulation", "Geometry", "Fluid"]:
+                             if "type" in inst and inst["type"] == "cluttered":
+                                 usd_path = f"{OBJECTS_PATH}/Clutter/{cat}/{cat_idx:05d}/object.usdz"
+@@ -840,6 +846,33 @@ class LayoutManager:
+         prim_path = f"{env_root}/{type}/{cat_name}/{inst_name}"
+         return (prim_path, inst_name)
+ 
++    def _reuse_articulation_paths(
++        self, env_idx: int, cat_name: str, model_idx: int, reused: set[str]
++    ) -> tuple[str, str] | None:
++        """Prim path and instance name of an existing articulation of this model, if one is free.
++
++        The scene manager builds articulations once, with the scene, and never respawns them
++        (see SceneManager.reload_env_scene). A later layout's articulation entries must therefore
++        name those objects: fresh names would point at objects that do not exist.
++
++        Args:
++            env_idx: Environment ID
++            cat_name: Category name
++            model_idx: Model index
++            reused: Instance names already given to entries of the layout being loaded
++
++        Returns:
++            Tuple of (prim_path, inst_name), or None when no articulation of this model is free
++        """
++        if self.scene_manager is None:
++            return None
++        for inst_name, obj in self.scene_manager._articulation_objects[env_idx].items():
++            if inst_name in reused or self.decode_inst_name(inst_name) != (cat_name, model_idx):
++                continue
++            reused.add(inst_name)
++            return (obj.usd_prim_path, inst_name)
++        return None
++
+     def _get_next_object_id(self, env_idx: int, cat_name: str, model_idx: int, type: str) -> int:
+         """Get the next available ID for a category in the specified environment.
+ 
+diff --git a/env/scene_manager/objects/articulation.py b/env/scene_manager/objects/articulation.py
+index 103b8b7..6eed0a3 100644
+--- a/env/scene_manager/objects/articulation.py
++++ b/env/scene_manager/objects/articulation.py
+@@ -69,6 +69,7 @@ class ArticulationObject(SingleArticulation):
+         self._default_linear_velocity = [0.0, 0.0, 0.0]
+         self._default_angular_velocity = [0.0, 0.0, 0.0]
+         self.init_scale = scale
++        self.in_layout = True  # False while the current layout does not use this object
+         if self.physics_cfg.get("fixed_base", False):
+             self.fix_root_link()
+         super().__init__(
+@@ -258,6 +259,23 @@ class ArticulationObject(SingleArticulation):
+             pass
+         return None
+ 
++    def rebind_layout(self, inst_config):
++        """Take over an entry of a newly loaded layout, which can only move this object.
++
++        Articulations are reused across layouts rather than respawned, so the settings applied
++        when the object was built (physics, visuals) must be the same, or the scene would differ
++        from a freshly built one.
++        """
++        for key in ("physics", "visual"):
++            if inst_config.get(key, {}) != self.instance_config.get(key, {}):
++                raise ValueError(
++                    f"{self.usd_prim_path}: the new layout changes '{key}', which needs a respawned object"
++                )
++        self.instance_config = inst_config
++        self.default_pos = inst_config.get("default_pos", (0.0, 0.0, 0.0))
++        self.default_ori = inst_config.get("default_ori", (1.0, 0.0, 0.0, 0.0))
++        self.init_scale = inst_config.get("scale", (1, 1, 1))
++
+     def apply_saved_pose(self):
+         self.set_current_joint_positions(self.initial_joint_positions)
+         if self.physics_cfg.get("reset_drive", False):
+diff --git a/env/scene_manager/scene_manager.py b/env/scene_manager/scene_manager.py
+index 91ac927..e81b673 100644
+--- a/env/scene_manager/scene_manager.py
++++ b/env/scene_manager/scene_manager.py
+@@ -215,7 +215,9 @@ class SceneManager:
+                 self._fluid_objects[env_idx],
+             ]:
+                 for obj in obj_dict.values():
+-                    obj.apply_saved_pose()
++                    # Articulations the current layout does not use stay offscreen
++                    if getattr(obj, "in_layout", True):
++                        obj.apply_saved_pose()
+ 
+         for _ in range(20):
+             self.sim.sim_step(render=False)
+@@ -227,7 +229,8 @@ class SceneManager:
+         Args:
+             env_id: ID of the environment to reset
+         """
+-        if not self.setup_scene:
++        new_layout = not self.setup_scene
++        if new_layout:
+             self.config[f"env{env_id}"] = self.layout_manager.load_saved_layout(env_id)
+         self.reload_lights(env_id)
+         self.reload_ground(env_id)
+@@ -245,6 +248,36 @@ class SceneManager:
+             # Clear existing objects (based on exclude_types)
+             self.clear_scene_objects(env_id, exclude_types=["articulation"])
+             self.spawn_scene_objects(env_id, exclude_types=["articulation"])
++        if new_layout:
++            self.rebind_articulations(env_id)
++
++    def rebind_articulations(self, env_id: int):
++        """Hand the scene's articulations to the layout just loaded.
++
++        Articulations are built once, with the scene, and never respawned (above); the layout
++        manager gives each articulation entry of a later layout the name of an existing
++        articulation of the same model. Move those objects to their new entries and keep the
++        others offscreen.
++
++        Args:
++            env_id: Environment ID
++        """
++        env_config = self.config.get(f"env{env_id}") or {}
++        in_layout = set()
++        for cat_cfg in (env_config.get("Articulation") or {}).values():
++            for inst_cfg in cat_cfg:
++                inst_name = inst_cfg["inst_name"]
++                obj = self._articulation_objects[env_id].get(inst_name)
++                if obj is None:
++                    raise RuntimeError(
++                        f"Layout for env {env_id} needs articulation {inst_name}, but articulations are only "
++                        "built with the scene and it holds none of this model; this layout needs a fresh process."
++                    )
++                deep_resolve_paths(inst_cfg)  # as spawn_category_objects does before building an object
++                obj.rebind_layout(inst_cfg)
++                in_layout.add(inst_name)
++        for inst_name, obj in self._articulation_objects[env_id].items():
++            obj.in_layout = inst_name in in_layout
+ 
+     def spawn_category_objects(
+         self,

@@ -20,6 +20,12 @@ clone_at vla-evaluation-harness https://github.com/allenai/vla-evaluation-harnes
 clone_at RoboDojo https://github.com/RoboDojo-Benchmark/RoboDojo.git ee67a1468510da7624a089164402359f2afc72c8
 git -C RoboDojo submodule update --quiet --init --recursive
 git -C RoboDojo submodule status
+# Our fixes to RoboDojo, as commits on top of the pin (see patches/robodojo/). clone_at resets
+# memvla-base, so they are re-applied on every run.
+for patch in "$MEMVLA_REPO"/scripts/termitech/patches/robodojo/*.patch; do
+    git -C RoboDojo -c user.name=memvla -c user.email=memvla@localhost am --quiet "$patch"
+done
+git -C RoboDojo log --oneline ee67a1468510da7624a089164402359f2afc72c8..HEAD
 
 # Tools, in user space
 [ -x "$MEMVLA_DATA/bin/micromamba" ] || \

@@ -1,0 +1,37 @@
+From f35296be89127faca62696583be33d99131aa8e6 Mon Sep 17 00:00:00 2001
+From: guanxiongsun <sungx.cs@gmail.com>
+Date: Sat, 26 Sep 2026 12:12:38 +0100
+Subject: [PATCH] Move deleted objects offscreen on the CPU path
+
+On the CPU pipeline, delete_scene_object removes a rigid or geometry
+object with destroy(), which hides it and disables its gravity but
+leaves the prim where it is, with its collision shapes still enabled.
+Every later layout in the process then holds invisible obstacles where
+earlier episodes left their objects. Objects placed there are pushed
+aside and the layout fails the stability check: swap_blocks, whose
+cubes always sit on one of three mats, lost 5 of its first 7 layouts,
+each of which settles in a fresh process. Leftovers that stay put
+remain in the robot's way during the episode.
+
+Move the object offscreen before destroying it, as relocate_stale_objects
+does for the objects it keeps.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ env/scene_manager/scene_manager.py | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/env/scene_manager/scene_manager.py b/env/scene_manager/scene_manager.py
+index e81b673..77cc682 100644
+--- a/env/scene_manager/scene_manager.py
++++ b/env/scene_manager/scene_manager.py
+@@ -722,6 +722,9 @@ class SceneManager:
+                     delete_prim(obj.prim_path)
+         else:
+             if isinstance(obj, RigidObject) or isinstance(obj, GeometryObject):
++                # destroy() keeps the prim in place and its collision shapes enabled; without the
++                # move, it stays an invisible obstacle in every later layout
++                obj.relocate_offscreen()
+                 obj.destroy()
+             elif isinstance(obj, GarmentObject):
+                 if hasattr(obj, "usd_prim_path") and is_prim_path_valid(obj.usd_prim_path):

@@ -1,0 +1,29 @@
+From a60e4eed65a9465dbc9ea86da051081905d6099f Mon Sep 17 00:00:00 2001
+From: guanxiongsun <sungx.cs@gmail.com>
+Date: Sat, 26 Sep 2026 12:33:41 +0100
+Subject: [PATCH 3/4] Delete the previous room on reset
+
+delete_fixture_prims removes <env_root>/Room, but select_room builds
+rooms under <env_root>/Rooms, so no room was ever deleted: each reset
+stacked another copy of the room (118 prims) in the same place, and
+rendering slowed with every layout.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ env/scene_manager/scene_manager.py | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/env/scene_manager/scene_manager.py b/env/scene_manager/scene_manager.py
+index 77cc682..b520d40 100644
+--- a/env/scene_manager/scene_manager.py
++++ b/env/scene_manager/scene_manager.py
+@@ -518,7 +518,8 @@ class SceneManager:
+         env_root = self.env_roots[env_id]
+         if types not in ["Table", "Room", "Light", "Ground"]:
+             return
+-        prim_path = f"{env_root}/{types}"
++        # LayoutManager.select_room builds rooms under <env_root>/Rooms
++        prim_path = f"{env_root}/{'Rooms' if types == 'Room' else types}"
+         if is_prim_path_valid(prim_path):
+             delete_prim(prim_path)
+ 

@@ -1,0 +1,48 @@
+From cd6ea8ae07066c48282cfe58121d8de4d3e1699e Mon Sep 17 00:00:00 2001
+From: guanxiongsun <sungx.cs@gmail.com>
+Date: Sat, 26 Sep 2026 12:45:42 +0100
+Subject: [PATCH] Build the camera views once, not on every reset
+
+TiledCaptureManager.reset() called init_cameras() on every reset,
+although, as its docstring says, a soft reset keeps the cameras.
+init_cameras() adds a view and a render product per camera without
+releasing the previous ones, so every reset added render products that
+every later render drew (step() reads only the first views), and
+repeated each camera's annotator types, which step() then read again.
+
+Set the views up again only when the camera manager has rebuilt its
+cameras.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ env/camera_manager/capture/tiled_capture_manager.py | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/env/camera_manager/capture/tiled_capture_manager.py b/env/camera_manager/capture/tiled_capture_manager.py
+index 079f3c7..dadfa0a 100644
+--- a/env/camera_manager/capture/tiled_capture_manager.py
++++ b/env/camera_manager/capture/tiled_capture_manager.py
+@@ -45,6 +45,8 @@ class TiledCaptureManager:
+         # Pre-allocated output buffers for each camera and annotator to reduce memory allocation
+         # Format: {cam_id: {annotator_name: wp.array}}
+         self._output_buffers: dict = {}
++        # The camera objects init_cameras() last set up views for (see reset)
++        self._cameras_set_up: List[List[int]] | None = None
+ 
+     def initialize(self, sim: IsaacRLEnv):
+         """
+@@ -181,7 +183,14 @@ class TiledCaptureManager:
+         Only Hard Reset need which means if we reset simulation backend we need to initialize camera again
+         Since Render product change, we also need to attch a new writer maybe
+         """
++        # init_cameras() adds views without releasing the old ones: each call left a render
++        # product per camera that every render drew (step() reads only the first views), and
++        # repeated the annotator types step() reads. Call it only when the cameras changed.
++        cameras = [[id(camera) for camera in env_cameras] for env_cameras in self.camera_manager.cameras]
++        if cameras == self._cameras_set_up:
++            return
+         self.init_cameras()
++        self._cameras_set_up = cameras
+ 
+     def destroy(self):
+         """

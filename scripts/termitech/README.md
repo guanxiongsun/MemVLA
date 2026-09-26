@@ -16,7 +16,7 @@ cd ~/code/MemVLA && source scripts/termitech/env.sh
 |---|---|
 | `~/code/MemVLA` | this repo |
 | `third_party/vla-evaluation-harness` | harness v0.7.0 (`6cc3e1b`), same as on Isambard |
-| `third_party/RoboDojo` | RoboDojo `ee67a14`, the harness's pin, with submodules at their recorded commits: IsaacLab `afca7b0`, cuRobo `d17b54c`, XPolicyLab `432f82b` |
+| `third_party/RoboDojo` | RoboDojo `ee67a14`, the harness's pin, plus our fixes from `patches/robodojo/` (see [Fixes to RoboDojo](#fixes-to-robodojo)), with submodules at their recorded commits: IsaacLab `afca7b0`, cuRobo `d17b54c`, XPolicyLab `432f82b` |
 | `$MEMVLA_DATA/envs/robodojo` | simulator env: Python 3.11, torch 2.7 (cu128), Isaac Sim 5.1, Isaac Lab, cuRobo, harness client |
 | `$MEMVLA_DATA/robodojo/Assets` | RoboDojo assets, 41 GB, dataset revision `43dacb1` |
 | `$MEMVLA_DATA/robodojo/ckpt/.../RoboDojo-sim-arx_x5-joint-0/59999` | released π0.5 checkpoint, training seed 0: `params` 12 GB, plus `train_state` 32 GB (optimizer state, only needed to resume training) |
@@ -31,7 +31,7 @@ location.
 ## Steps
 
 ```bash
-scripts/termitech/01_fetch_code.sh      # upstream code at the pinned commits; uv, micromamba
+scripts/termitech/01_fetch_code.sh      # upstream code at the pinned commits, our RoboDojo fixes; uv, micromamba
 scripts/termitech/02_download.sh        # assets + π0.5 checkpoint, 86 GB, resumable
 scripts/termitech/03_model_env.sh       # harness CLI and π0.5 server envs
 scripts/termitech/05_isaacsim_wheels.sh # Isaac Sim's NVIDIA-only wheels, 4.7 GB, ~5 h (see below)
@@ -92,15 +92,66 @@ Neither matters for evaluation. This was checked on 26 Sep 2026 by running the s
 - The π0.5 server runs in its own environment with websockets 16.1. Client and server only need
   to speak the WebSocket protocol, not share a library version.
 
+## Fixes to RoboDojo
+
+`01_fetch_code.sh` applies the patches in `patches/robodojo/` to RoboDojo `ee67a14`, as commits on
+its `memvla-base` branch. They fix four bugs that only show when one process resets the scene many
+times. The harness does exactly that, before every episode; RoboDojo's own evaluation runs 10
+environments side by side, so a 50-episode task resets only five times.
+
+| Patch | Bug | Without it |
+|---|---|---|
+| `0001` Reuse articulations across layouts | Articulated objects are built once, with the scene, but every later layout gave its articulation entries new names that no object has. | In every task with an articulated object, each layout after the first fails to build. This is why the harness authors found `press_by_number` and `swap_blocks` (whose buttons are articulated) broken. |
+| `0002` Move deleted objects offscreen | A finished layout's objects are hidden and lose gravity, but stay where they are, with their collision shapes on. | Every task collects invisible obstacles wherever earlier episodes left their objects. Objects placed there are pushed aside, so layouts fail the stability check, and the robot can run into leftovers mid-episode. |
+| `0003` Delete the previous room on reset | Rooms are deleted from `<env>/Room` but built under `<env>/Rooms`. | Each reset stacks another copy of the room. |
+| `0004` Build the camera views once | Each reset added a render product per camera, never released, that every later render drew. | Rendering and observations slow down with every reset. |
+
+Measured on 26 Sep 2026, layout group 0, one process per task:
+
+- `press_by_number`: without the fixes, layout 0 built and layouts 1–38 all failed, until the
+  harness's watchdog stopped the process. With them, all 65 layouts build and settle.
+- `swap_blocks`: with only `0001`, 14 of the first 21 layouts failed the stability check; the two
+  of those tried in a fresh process settled there. With all four fixes, all 55 layouts settle.
+- Reset speed: with `0001` and `0002` only, a render took 40 ms at the first layout and 274 ms at
+  the sixth, and a reset 18 s at the second layout and 33 s at the sixth. With all four, a render
+  takes 40 ms throughout, and a reset about 15 s from the second layout to the 65th.
+
+`layout_check.sh` repeats the first two checks and `reset_timing.py` the third.
+
+What remains:
+
+- Tasks whose articulated model changes between layouts (`make_toast`, `make_toast_random`,
+  `store_laptop_and_headphones_random`) can only use layouts with the model of the process's first
+  layout; the others fail with an error saying so and are skipped (by design, not yet tried).
+- A finished layout's objects stay on the stage, hidden and 100 km away, 90–100 prims per
+  reset. Deleting a rigid object mid-simulation invalidates Isaac Sim's physics views, after which
+  the robot's state can no longer be read. The leftovers no longer slow rendering.
+- The harness authors' RoboDojo reproduction (the four other Memory tasks, 15 episodes each) ran
+  without these fixes.
+
 ## Running evaluations
 
-`smoke.sh` shows the pattern: the π0.5 server on one GPU, Isaac Sim on another, the harness in
-`--no-docker` mode with `--param root=$ROBODOJO_ROOT`. Per the harness's RoboDojo notes: one task
-per process (Isaac's simulation context is process-global), one simulator per GPU (sharing a GPU
-made throughput ~8× worse), and roughly 12–20 GPU-hours per task at 50 episodes.
+`eval_task.sh` runs one task under the published protocol (the task's entry in the harness's
+`configs/benchmarks/robodojo/eval.yaml`), with π0.5 on one GPU and Isaac Sim on another, and
+records videos. `EPISODES` runs fewer episodes than the protocol's. `layout_check.sh` builds every
+layout of a task without a policy.
+
+```bash
+GPU_SIM=1 GPU_MODEL=3 scripts/termitech/eval_task.sh press_by_number           # 50 episodes
+GPU_SIM=1 GPU_MODEL=3 EPISODES=3 scripts/termitech/eval_task.sh swap_blocks
+GPU=1 GROUP=0 scripts/termitech/layout_check.sh swap_blocks
+```
+
+Per the harness's RoboDojo notes: one task per process (Isaac's simulation context is
+process-global), one simulator per GPU (sharing a GPU made throughput ~8× worse), and roughly 12–20
+GPU-hours per task at 50 episodes, a figure measured without the fixes above.
 
 Verified on 26 Sep 2026: `stack_blocks`, 20 steps, results and video written, with RTX-rendered
-camera frames on the A100 (GPU 1 for Isaac Sim, GPU 3 for the server).
+camera frames on the A100 (GPU 1 for Isaac Sim, GPU 3 for the server). After the fixes, π0.5 ran
+3 protocol episodes each of `press_by_number` and `swap_blocks` (layouts 0–2, one process per
+task) without errors, at 65–80 steps a minute; all six scored 0. The videos show each layout's own
+number cards and cube positions, and the layout-1 `press_by_number` episode ends as the policy
+presses the blue confirm button before the red presses the cards ask for.
 
 Two things any run script must handle:
 
