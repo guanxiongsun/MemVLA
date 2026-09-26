@@ -49,6 +49,9 @@ pip "isaacsim[all,extscache]==5.1.0" --find-links "$WH"   # confirms the set; th
 pip "${pins[@]}"
 # install.sh: setup_isaaclab, with "none" as in the Dockerfile (eval needs no RL frameworks)
 (cd third_party/IsaacLab && ./isaaclab.sh --install none)
+# install.sh: ensure_torch_cuda_stack. Isaac Lab's pip installs drop torchaudio, which isaacsim-core needs.
+python -c "import torchaudio" 2>/dev/null || pip torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 \
+    --index-url https://download.pytorch.org/whl/cu128
 pip "${pins[@]}"
 # install.sh: setup_curobo
 python -m pip uninstall -y nvidia-curobo curobo >/dev/null 2>&1 || true
