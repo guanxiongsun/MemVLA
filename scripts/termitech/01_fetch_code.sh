@@ -15,6 +15,10 @@ clone_at() {  # <dir> <url> <tag or commit>
 }
 
 clone_at vla-evaluation-harness https://github.com/allenai/vla-evaluation-harness.git v0.7.0
+# Our changes to the harness, as commits on memvla-base (see patches/harness/)
+for patch in "$MEMVLA_REPO"/scripts/termitech/patches/harness/*.patch; do
+    git -C vla-evaluation-harness -c user.name=memvla -c user.email=memvla@localhost am --quiet "$patch"
+done
 # The harness's pin (configs/benchmarks/robodojo/README.md). Submodules stay at the commits this
 # RoboDojo commit records; upstream's install.sh uses --remote, which tracks moving branch heads.
 clone_at RoboDojo https://github.com/RoboDojo-Benchmark/RoboDojo.git ee67a1468510da7624a089164402359f2afc72c8

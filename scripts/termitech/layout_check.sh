@@ -8,7 +8,7 @@
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 TASK=${1:?usage: layout_check.sh TASK}; GPU=${GPU:-1}; GROUP=${GROUP:-0}; PORT=${PORT:-$((18100 + GPU))}
-N=$(ls "$ROBODOJO_ASSETS/Eval_Layout/RoboDojo/arx_x5/$GROUP/$TASK"_*.json 2>/dev/null | wc -l)
+N=$(ls "$ROBODOJO_ASSETS/Eval_Layout/RoboDojo/arx_x5/$GROUP" | grep -cE "^${TASK}_[0-9]+\.json$" || true)
 [ "$N" -gt 0 ] || { echo "no layouts for $TASK in group $GROUP" >&2; exit 1; }
 RUN=layouts_${TASK}_g${GROUP}_$(date +%Y%m%d_%H%M%S)
 LOGS=$MEMVLA_DATA/logs/$RUN OUT=$MEMVLA_DATA/results/$RUN

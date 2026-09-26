@@ -15,7 +15,7 @@ cd ~/code/MemVLA && source scripts/termitech/env.sh
 | Path | Contents |
 |---|---|
 | `~/code/MemVLA` | this repo |
-| `third_party/vla-evaluation-harness` | harness v0.7.0 (`6cc3e1b`), same as on Isambard |
+| `third_party/vla-evaluation-harness` | harness v0.7.0 (`6cc3e1b`), same as on Isambard, plus our patch in `patches/harness/` (layout ranges, for `run_protocol.py`) |
 | `third_party/RoboDojo` | RoboDojo `ee67a14`, the harness's pin, plus our fixes from `patches/robodojo/` (see [Fixes to RoboDojo](#fixes-to-robodojo)), with submodules at their recorded commits: IsaacLab `afca7b0`, cuRobo `d17b54c`, XPolicyLab `432f82b` |
 | `$MEMVLA_DATA/envs/robodojo` | simulator env: Python 3.11, torch 2.7 (cu128), Isaac Sim 5.1, Isaac Lab, cuRobo, harness client |
 | `$MEMVLA_DATA/robodojo/Assets` | RoboDojo assets, 41 GB, dataset revision `43dacb1` |
@@ -141,6 +141,24 @@ GPU_SIM=1 GPU_MODEL=3 scripts/termitech/eval_task.sh press_by_number           #
 GPU_SIM=1 GPU_MODEL=3 EPISODES=3 scripts/termitech/eval_task.sh swap_blocks
 GPU=1 GROUP=0 scripts/termitech/layout_check.sh swap_blocks
 ```
+
+`run_protocol.py` runs several tasks on several GPUs at once. It splits each task into chunks of
+10 layouts (the harness patch in `patches/harness/` lets the RoboDojo adapter run a layout range),
+runs one simulator per GPU, longest tasks first, and shares π0.5 servers among the simulators: π0.5
+infers once per 50-step action chunk, so a server can sit on a simulator's GPU with a capped
+memory share. It re-runs a chunk whose simulator dies, makes up layouts that fail to build from
+the next ones, and combines the chunks into each task's first 50 episodes in layout order.
+
+```bash
+setsid nohup $ROBODOJO_ENV/bin/python scripts/termitech/run_protocol.py run \
+    --tasks cover_blocks,swap_T --gpus 1,3,4,5,6,7 --server-gpus 1,5 \
+    > $MEMVLA_DATA/logs/protocol.log 2>&1 < /dev/null &
+$ROBODOJO_ENV/bin/python scripts/termitech/run_protocol.py summarize $MEMVLA_DATA/results/protocol_<time>
+```
+
+Results go to `$MEMVLA_DATA/results/protocol_<time>/`: `summary.txt` per task (success rate with
+95% interval, score, layouts used), `state.json` for progress, and each chunk's harness output,
+videos included.
 
 Per the harness's RoboDojo notes: one task per process (Isaac's simulation context is
 process-global), one simulator per GPU (sharing a GPU made throughput ~8× worse), and roughly 12–20

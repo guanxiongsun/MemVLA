@@ -1,0 +1,78 @@
+From f52501115ccda0afe88cac67bd7ea7bd9c48e05a Mon Sep 17 00:00:00 2001
+From: guanxiongsun <sungx.cs@gmail.com>
+Date: Sat, 26 Sep 2026 16:29:10 +0100
+Subject: [PATCH] RoboDojo: run a range of layouts per process
+
+Add layout_start and layout_stop, so several processes can split one
+task's layouts between GPUs. A process builds its scene with
+layout_start: the first reset keeps the scene built with cfg.sim.seed
+instead of loading the requested layout, so the two must match.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/vla_eval/benchmarks/robodojo/benchmark.py | 18 +++++++++++++++---
+ 1 file changed, 15 insertions(+), 3 deletions(-)
+
+diff --git a/src/vla_eval/benchmarks/robodojo/benchmark.py b/src/vla_eval/benchmarks/robodojo/benchmark.py
+index d01bfb1..c49063e 100644
+--- a/src/vla_eval/benchmarks/robodojo/benchmark.py
++++ b/src/vla_eval/benchmarks/robodojo/benchmark.py
+@@ -85,6 +85,10 @@ class RoboDojoBenchmark(StepBenchmark):
+         stream_upstream_videos: Keep RoboDojo's own per-camera ffmpeg episode
+             streams (written under ``<root>/eval_result``). Off by default —
+             vla-eval's recorder owns video capture.
++        layout_start, layout_stop: Consume only layouts ``layout_start`` up to (not
++            including) ``layout_stop`` of the group, so several processes can split
++            one task's layouts. The scene is built with ``layout_start``, as a
++            process starting at layout 0 builds it with layout 0.
+     """
+ 
+     _ALL_RECORD_FIELDS = frozenset({"reward", "done", "success", "score"})
+@@ -99,8 +103,12 @@ class RoboDojoBenchmark(StepBenchmark):
+         seed: int = 0,
+         enable_planner: bool = False,
+         stream_upstream_videos: bool = False,
++        layout_start: int = 0,
++        layout_stop: int | None = None,
+     ) -> None:
+         super().__init__()
++        self._layout_start = int(layout_start)
++        self._layout_stop = None if layout_stop is None else int(layout_stop)
+         self._root = Path(root).resolve()
+         self._task_names = list(tasks or DEFAULT_TASKS)
+         self._env_config = env_config
+@@ -208,7 +216,9 @@ class RoboDojoBenchmark(StepBenchmark):
+             eval_cfg.get("observation", {}).get("collect_freq", 0),
+             force_add=True,
+         )
+-        cfg.sim.seed = [0]
++        # The scene is built with this layout, and the first reset keeps it instead of
++        # loading the requested one, so it must be the first layout reset() asks for.
++        cfg.sim.seed = [self._layout_start]
+ 
+         # Keep EvalEnv from opening its legacy policy connection while it is
+         # being constructed; the harness connection is authoritative.
+@@ -280,11 +290,13 @@ class RoboDojoBenchmark(StepBenchmark):
+         if self._env is None:
+             self._env = self._build_env(task_name)
+             self._current_task_name = task_name
+-            self._layout_cursor = 0
++            self._layout_cursor = self._layout_start
+         env = self._env
+         # Upstream semantics: consume the group's numbered layouts in order and skip
+         # ones whose scene fails to build/settle, so every counted episode ran.
+         total = len(env.seed_manager.seed_list)
++        if self._layout_stop is not None:
++            total = min(total, self._layout_stop)
+         while self._layout_cursor < total:
+             layout_id = self._layout_cursor
+             self._layout_cursor += 1
+@@ -309,7 +321,7 @@ class RoboDojoBenchmark(StepBenchmark):
+             self._current_layout_id = layout_id
+             self._recorder.record_video(self._extract_frame(raw_obs))
+             return raw_obs
+-        raise RuntimeError(f"RoboDojo: exhausted all {total} layouts for {task_name}")
++        raise RuntimeError(f"RoboDojo: exhausted layouts {self._layout_start}-{total - 1} for {task_name}")
+ 
+     @staticmethod
+     def _unflatten_action(values: Any) -> dict[str, np.ndarray]:
