@@ -77,4 +77,18 @@ Run long steps detached, since there is no scheduler here:
 per process (Isaac's simulation context is process-global), one simulator per GPU (sharing a GPU
 made throughput ~8× worse), and roughly 12–20 GPU-hours per task at 50 episodes.
 
+Verified on 26 Sep 2026: `stack_blocks`, 20 steps, results and video written, with RTX-rendered
+camera frames on the A100 (GPU 1 for Isaac Sim, GPU 3 for the server).
+
+Two things any run script must handle:
+
+- **Isaac Sim crashes or hangs on shutdown**, after the results are written. Wait for the results
+  file, not the process, then stop it; `smoke.sh` does this.
+- **Stop whole process groups.** `vla-eval serve` starts the model under `uv run`; killing only the
+  top process left the server holding 61 GB of GPU memory. Start each with `setsid` and kill its
+  group.
+
+On a crash, Isaac Sim's crash reporter uploads the dump to NVIDIA, as covered by the privacy terms
+accepted for this setup. Pass `--/crashreporter/enabled=false` to Isaac Sim to turn it off.
+
 Check `nvidia-smi` before choosing GPUs: other users' processes may be running.
